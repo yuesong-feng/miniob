@@ -6,8 +6,9 @@
 using namespace std;
 int main(int argc, char const *argv[])
 {
-    BPTree<int, int> *tree = new BPTree<int, int>();
-    tree->insert(1, 1);
-    tree->scan();
+    BPTree<int, const char*> *tree = new BPTree<int, const char*>();
+    tree->insert(1, "This is the first data!");
+    tree->insert(2, "This is the second data!");
+    tree->display();
     return 0;
 }

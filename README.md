@@ -12,19 +12,19 @@ C/C++学习的一个难点在于初学时无法做出实际上的东西，没有
 
 在code文件夹里有每一天的代码文件夹，进入该文件夹，使用`make`命令编译，会生成一个可执行文件，输入命令`./database`就能看到今天的学习成果！
 
-[day01-构建数据库引擎-B+树(Alt2，支持任意类型键值存储)](https://github.com/yuesong-feng/30dayMakeCppServer/blob/main/day01-构建数据库引擎-B+树(Alt2，支持任意类型键值存储).md)
+[day01-构建数据库引擎-B+树(Alt2，支持任意类型键值存储)](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/master/day01-构建数据库引擎-B%2B树(Alt2，支持任意类型键值存储).md)
 
-[day02-B+树插入的辅助函数](https://github.com/yuesong-feng/30dayMakeCppServer/blob/main/.md)
+[day02-B+树插入的辅助函数](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/main/day02-B+树插入的辅助函数.md)
 
-[day03-支持B+树插入操作](https://github.com/yuesong-feng/30dayMakeCppServer/blob/main/.md)
+[day03-支持B+树插入操作](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/main/day03-支持B+树插入操作.md)
 
-[day04-B+树删除的辅助函数](https://github.com/yuesong-feng/30dayMakeCppServer/blob/main/.md)
+day04-B+树删除的辅助函数
 
-[day05-支持B+树删除操作](https://github.com/yuesong-feng/30dayMakeCppServer/blob/main/.md)
+day05-支持B+树删除操作
 
-[day06-将索引和数据持久化到磁盘](https://github.com/yuesong-feng/30dayMakeCppServer/blob/main/.md)
+day06-将索引和数据持久化到磁盘
 
-[day07-支持从磁盘读取](https://github.com/yuesong-feng/30dayMakeCppServer/blob/main/.md)
+day07-支持从磁盘读取
 
 ### todo list:
 
