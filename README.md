@@ -14,9 +14,9 @@ C/C++学习的一个难点在于初学时无法做出实际上的东西，没有
 
 [day01-构建数据库引擎-B+树(Alt2，支持任意类型键值存储)](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/master/day01-构建数据库引擎-B%2B树(Alt2，支持任意类型键值存储).md)
 
-[day02-B+树插入的辅助函数](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/main/day02-B+树插入的辅助函数.md)
+[day02-B+树插入的辅助函数](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/master/day02-B+树插入的辅助函数.md)
 
-[day03-支持B+树插入操作](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/main/day03-支持B+树插入操作.md)
+[day03-支持B+树插入操作](https://github.com/yuesong-feng/30dayMakeCppDatabase/blob/master/day03-支持B+树插入操作.md)
 
 day04-B+树删除的辅助函数
 
