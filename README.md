@@ -34,7 +34,7 @@ C/C++学习的一个难点在于初学时无法做出实际上的东西，没有
 
 处理死锁
 
-conflict serializable 事务的优化
+处理conflict serializable事务
 
 日志系统
 
