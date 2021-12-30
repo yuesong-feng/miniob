@@ -28,6 +28,12 @@ day07-支持从磁盘读取
 
 ### todo list:
 
+Buffer pool manager
+
+query execution
+
+Concurrency Control
+
 实现行锁与表锁
 
 支持事务（ACID）
