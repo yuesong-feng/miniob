@@ -1,0 +1,62 @@
+RC Table::make_record(int value_num, const Value *values, char *&record_out)
+{
+  // 检查字段类型是否一致
+  if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
+    LOG_WARN("Input values don't match the table's schema, table name:%s", table_meta_.name());
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+
+  const int normal_field_start_index = table_meta_.sys_field_num();
+  const FieldMeta *sys_field_nullable = table_meta_.field(NULLABLE_COLUMN);
+  for (int i = 0; i < value_num; i++) {
+    const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
+    const Value &value = values[i];
+    if (value.type == NULLS) {
+      //return RC::UNIMPLENMENT; // TODO: remove
+      if (field->nullable() == false) {
+        LOG_WARN("Field %s can not be null", field->name());
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
+    }
+    else if (field->type() != value.type) {
+      LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
+          table_meta_.name(),
+          field->name(),
+          field->type(),
+          value.type);
+      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+  }
+
+  // 复制所有字段的值，未处理空值
+  int record_size = table_meta_.record_size();
+  char *record = new char[record_size];
+  char *nullableBitmap_data = new char[sys_field_nullable->len()];
+  memset(nullableBitmap_data, 0, sys_field_nullable->len());
+  for (int i = 0; i < value_num; i++) {
+    const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
+    const Value &value = values[i];
+    size_t copy_len = field->len();
+    if (value.type != NULLS && field->type() == CHARS) {
+      const size_t data_len = strlen((const char *)value.data);
+      if (copy_len > data_len) {
+        copy_len = data_len + 1;
+      }
+    }
+    if (value.type == NULLS && field->nullable() == true) {
+      uint8_t mask = (0x01 << (BYTE_MOVE_BIT - i % BYTE_BIT));
+      nullableBitmap_data[i / BYTE_BIT] |= mask;
+      char *null_data = new char[field->len()];
+      memset(null_data, 0, field->len());
+      memcpy(record + field->offset(), null_data, field->len());
+      delete []null_data;
+    }
+    else {
+      memcpy(record + field->offset(), value.data, copy_len);
+    }
+  }
+  memcpy(record + sys_field_nullable->offset(), nullableBitmap_data, sys_field_nullable->len());
+  delete [] nullableBitmap_data;
+  record_out = record;
+  return RC::SUCCESS;
+}

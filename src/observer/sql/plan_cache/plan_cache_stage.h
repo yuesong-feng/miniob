@@ -30,13 +30,11 @@ protected:
   bool initialize();
   void cleanup();
   void handle_event(common::StageEvent *event);
-  void callback_event(common::StageEvent *event,
-                     common::CallbackContext *context);
+  void callback_event(common::StageEvent *event, common::CallbackContext *context);
 
 protected:
 private:
-  Stage *parse_stage = nullptr;
-  Stage *execute_stage = nullptr;
+  Stage *parse_stage_ = nullptr;
 };
 
-#endif //__OBSERVER_SQL_PLAN_CACHE_STAGE_H__
+#endif  //__OBSERVER_SQL_PLAN_CACHE_STAGE_H__

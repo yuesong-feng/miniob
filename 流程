@@ -1,0 +1,7 @@
+parser: 解析sql    Failed to parse sql
+
+stmt: 组成Stmt
+
+Executor: 执行器   调用operator
+
+

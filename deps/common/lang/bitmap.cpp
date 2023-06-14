@@ -14,10 +14,10 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/lang/bitmap.h"
 
-namespace common
-{
+namespace common {
 
-int find_first_zero(char byte, int start) {
+int find_first_zero(char byte, int start)
+{
   for (int i = start; i < 8; i++) {
     if ((byte & (1 << i)) == 0) {
       return i;
@@ -26,7 +26,8 @@ int find_first_zero(char byte, int start) {
   return -1;
 }
 
-int find_first_setted(char byte, int start) {
+int find_first_setted(char byte, int start)
+{
   for (int i = start; i < 8; i++) {
     if ((byte & (1 << i)) != 0) {
       return i;
@@ -35,25 +36,37 @@ int find_first_setted(char byte, int start) {
   return -1;
 }
 
-Bitmap::Bitmap(char *bitmap, int size) : bitmap_(bitmap), size_(size) {
+Bitmap::Bitmap() : bitmap_(nullptr), size_(0)
+{}
+Bitmap::Bitmap(char *bitmap, int size) : bitmap_(bitmap), size_(size)
+{}
+
+void Bitmap::init(char *bitmap, int size)
+{
+  bitmap_ = bitmap;
+  size_ = size;
 }
 
-bool Bitmap::get_bit(int index) {
+bool Bitmap::get_bit(int index)
+{
   char bits = bitmap_[index / 8];
   return (bits & (1 << (index % 8))) != 0;
 }
 
-void Bitmap::set_bit(int index) {
+void Bitmap::set_bit(int index)
+{
   char &bits = bitmap_[index / 8];
   bits |= (1 << (index % 8));
 }
 
-void Bitmap::clear_bit(int index) {
+void Bitmap::clear_bit(int index)
+{
   char &bits = bitmap_[index / 8];
   bits &= ~(1 << (index % 8));
 }
 
-int Bitmap::next_unsetted_bit(int start) {
+int Bitmap::next_unsetted_bit(int start)
+{
   int ret = -1;
   int start_in_byte = start % 8;
   for (int iter = start / 8, end = (size_ % 8 == 0 ? size_ / 8 : size_ / 8 + 1); iter <= end; iter++) {
@@ -75,7 +88,8 @@ int Bitmap::next_unsetted_bit(int start) {
   return ret;
 }
 
-int Bitmap::next_setted_bit(int start) {
+int Bitmap::next_setted_bit(int start)
+{
   int ret = -1;
   int start_in_byte = start % 8;
   for (int iter = start / 8, end = (size_ % 8 == 0 ? size_ / 8 : size_ / 8 + 1); iter <= end; iter++) {
@@ -97,4 +111,4 @@ int Bitmap::next_setted_bit(int start) {
   return ret;
 }
 
-} // namespace common
+}  // namespace common

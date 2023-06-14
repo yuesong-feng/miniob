@@ -7,18 +7,6 @@ set(CMAKE_CXX_STANDARD 14)
 
 project(minidb)
 
-include_directories(
-    "/opt/homebrew/Cellar/libevent/2.1.12/include"
-    "/opt/homebrew/Cellar/jsoncpp/1.9.5/include"
-    "/opt/homebrew/Cellar/googletest/1.11.0/include"
-)
-link_directories(
-    "/opt/homebrew/Cellar/libevent/2.1.12/lib"
-    "/opt/homebrew/Cellar/jsoncpp/1.9.5/lib"
-    "/opt/homebrew/Cellar/googletest/1.11.0/lib"
-)
-
-
 MESSAGE(STATUS "This is SOURCE dir " ${test_SOURCE_DIR})
 MESSAGE(STATUS "This is BINARY dir " ${test_BINARY_DIR})
 MESSAGE(STATUS "This is Project source dir " ${PROJECT_SOURCE_DIR})
@@ -67,6 +55,13 @@ SET(CMAKE_CXX_FLAGS ${CMAKE_COMMON_FLAGS})
 SET(CMAKE_C_FLAGS ${CMAKE_COMMON_FLAGS})
 MESSAGE("CMAKE_CXX_FLAGS is " ${CMAKE_CXX_FLAGS})
 
+OPTION(ENABLE_ASAN OFF "Enable build with address sanitizer")
+
+IF (ENABLE_ASAN)
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+    SET(CMAKE_LINKER_FLAGS_DEBUG  "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+ENDIF()
 
 IF (CMAKE_INSTALL_PREFIX)
     MESSAGE("CMAKE_INSTALL_PREFIX has been set as " ${CMAKE_INSTALL_PREFIX} )
@@ -81,9 +76,13 @@ MESSAGE("Install target dir is " ${CMAKE_INSTALL_PREFIX})
 # ADD_SUBDIRECTORY(src bin)  bin 为目标目录， 可以省略
 ADD_SUBDIRECTORY(deps)
 ADD_SUBDIRECTORY(src)
-ADD_SUBDIRECTORY(unitest)
-ADD_SUBDIRECTORY(test)
+ADD_SUBDIRECTORY(test/perf)
 
+OPTION(WITH_UNIT_TESTS "Compile miniob with unit tests" ON)
+
+IF(WITH_UNIT_TESTS)
+    ADD_SUBDIRECTORY(unitest)
+ENDIF()
 
 # install 准备安装的目录是cmakefile 的当前目录， 不是build 后生成的目录
 # Files 默认权限OWNER_WRITE, OWNER_READ, GROUP_READ,和WORLD_READ，即644权限

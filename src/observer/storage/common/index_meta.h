@@ -9,13 +9,14 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 //
-// Created by Wangyunlai on 2021/5/12.
+// Created by Meiyi & Wangyunlai on 2021/5/12.
 //
 
 #ifndef __OBSERVER_STORAGE_COMMON_INDEX_META_H__
 #define __OBSERVER_STORAGE_COMMON_INDEX_META_H__
 
 #include <string>
+#include <vector>
 #include "rc.h"
 
 class TableMeta;
@@ -23,25 +24,34 @@ class FieldMeta;
 
 namespace Json {
 class Value;
-} // namespace Json
+}  // namespace Json
 
 class IndexMeta {
 public:
   IndexMeta() = default;
 
-  RC init(const char *name, const FieldMeta &field);
+  // RC init(const char *name, const FieldMeta &field, const bool is_unique);
+  RC init(const char *name, std::vector<FieldMeta> &fielsds, const bool is_unique);
 
 public:
   const char *name() const;
-  const char *field() const;
+  const char *field2() const;
+  const char *fields(int i) const;
+  std::vector<const char*> fields() const;
+  const int fields_num() const;
+  const bool is_unique() const;
+  const bool is_multi_index() const;
 
   void desc(std::ostream &os) const;
+
 public:
   void to_json(Json::Value &json_value) const;
   static RC from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index);
 
-private:
-  std::string       name_;
-  std::string       field_;
+protected:
+  std::string name_;   // index's name
+  // std::string field_;  // field's name
+  std::vector<std::string> fields_;
+  bool is_unique_;
 };
-#endif // __OBSERVER_STORAGE_COMMON_INDEX_META_H__
+#endif  // __OBSERVER_STORAGE_COMMON_INDEX_META_H__

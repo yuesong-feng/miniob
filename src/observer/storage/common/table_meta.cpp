@@ -9,10 +9,11 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 //
-// Created by Wangyunlai on 2021/5/12.
+// Created by Meiyi & Wangyunlai on 2021/5/12.
 //
 
 #include <algorithm>
+#include <common/lang/string.h>
 
 #include "storage/common/table_meta.h"
 #include "json/json.h"
@@ -25,40 +26,61 @@ static const Json::StaticString FIELD_INDEXES("indexes");
 
 std::vector<FieldMeta> TableMeta::sys_fields_;
 
-TableMeta::TableMeta(const TableMeta &other) :
-        name_(other.name_),
-        fields_(other.fields_),
-        indexes_(other.indexes_),
-        record_size_(other.record_size_){
-}
+TableMeta::TableMeta(const TableMeta &other)
+    : name_(other.name_), fields_(other.fields_), indexes_(other.indexes_), record_size_(other.record_size_)
+{}
 
-void TableMeta::swap(TableMeta &other) noexcept{
+void TableMeta::swap(TableMeta &other) noexcept
+{
   name_.swap(other.name_);
   fields_.swap(other.fields_);
   indexes_.swap(other.indexes_);
   std::swap(record_size_, other.record_size_);
 }
 
-RC TableMeta::init_sys_fields() {
-  sys_fields_.reserve(1);
+// RC TableMeta::init_sys_fields()
+// {
+//   sys_fields_.reserve(1);
+//   FieldMeta field_meta;
+//   RC rc = field_meta.init(Trx::trx_field_name(), Trx::trx_field_type(), 0, Trx::trx_field_len(), false, false);
+//   if (rc != RC::SUCCESS) {
+//     LOG_ERROR("Failed to init trx field. rc = %d:%s", rc, strrc(rc));
+//     return rc;
+//   }
+
+//   sys_fields_.push_back(field_meta);
+//   return rc;
+// }
+RC TableMeta::init_sys_fields()
+{
   FieldMeta field_meta;
-  RC rc = field_meta.init(Trx::trx_field_name(), Trx::trx_field_type(), 0, Trx::trx_field_len(), false);
+  RC rc = field_meta.init(Trx::trx_field_name(), Trx::trx_field_type(), 0, Trx::trx_field_len(), false, false);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to init trx field. rc = %d:%s", rc, strrc(rc));
     return rc;
   }
 
   sys_fields_.push_back(field_meta);
+
+  //创建的nullable隐藏列, 该列为四个字节，共32bit，每个bit映射每一列，最多可映射32个列
+  FieldMeta field_meta_nullable;
+  rc = field_meta_nullable.init( "_nullable", INTS, Trx::trx_field_len(), sizeof(int32_t), false, false);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to init nullable field. rc = %d:%s", rc, strrc(rc));
+    return rc;
+  }
+  sys_fields_.push_back(field_meta_nullable);
   return rc;
 }
-RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[]) {
-  if (nullptr == name || '\0' == name[0]) {
+RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
+{
+  if (common::is_blank(name)) {
     LOG_ERROR("Name cannot be empty");
     return RC::INVALID_ARGUMENT;
   }
 
   if (field_num <= 0 || nullptr == attributes) {
-    LOG_ERROR("Invalid argument. field_num=%d, attributes=%p", field_num, attributes);
+    LOG_ERROR("Invalid argument. name=%s, field_num=%d, attributes=%p", name, field_num, attributes);
     return RC::INVALID_ARGUMENT;
   }
 
@@ -76,11 +98,12 @@ RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
     fields_[i] = sys_fields_[i];
   }
 
-  int field_offset = sys_fields_.back().offset() + sys_fields_.back().len(); // 当前实现下，所有类型都是4字节对齐的，所以不再考虑字节对齐问题
+  // 当前实现下，所有类型都是4字节对齐的，所以不再考虑字节对齐问题
+  int field_offset = sys_fields_.back().offset() + sys_fields_.back().len();
 
   for (int i = 0; i < field_num; i++) {
     const AttrInfo &attr_info = attributes[i];
-    rc = fields_[i + sys_fields_.size()].init(attr_info.name, attr_info.type, field_offset, attr_info.length, true);
+    rc = fields_[i + sys_fields_.size()].init(attr_info.name, attr_info.type, field_offset, attr_info.length, true, attr_info.nullable);
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name);
       return rc;
@@ -92,27 +115,32 @@ RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[])
   record_size_ = field_offset;
 
   name_ = name;
-  LOG_INFO("Init table meta success. table name=%s", name);
+  LOG_INFO("Sussessfully initialized table meta. table name=%s", name);
   return RC::SUCCESS;
 }
 
-RC TableMeta::add_index(const IndexMeta &index) {
+RC TableMeta::add_index(const IndexMeta &index)
+{
   indexes_.push_back(index);
   return RC::SUCCESS;
 }
 
-const char *TableMeta::name() const {
+const char *TableMeta::name() const
+{
   return name_.c_str();
 }
 
-const FieldMeta * TableMeta::trx_field() const {
+const FieldMeta *TableMeta::trx_field() const
+{
   return &fields_[0];
 }
 
-const FieldMeta * TableMeta::field(int index) const {
+const FieldMeta *TableMeta::field(int index) const
+{
   return &fields_[index];
 }
-const FieldMeta * TableMeta::field(const char *name) const {
+const FieldMeta *TableMeta::field(const char *name) const
+{
   if (nullptr == name) {
     return nullptr;
   }
@@ -124,7 +152,8 @@ const FieldMeta * TableMeta::field(const char *name) const {
   return nullptr;
 }
 
-const FieldMeta * TableMeta::find_field_by_offset(int offset) const {
+const FieldMeta *TableMeta::find_field_by_offset(int offset) const
+{
   for (const FieldMeta &field : fields_) {
     if (field.offset() == offset) {
       return &field;
@@ -132,15 +161,27 @@ const FieldMeta * TableMeta::find_field_by_offset(int offset) const {
   }
   return nullptr;
 }
-int TableMeta::field_num() const {
+int TableMeta::field_num() const
+{
   return fields_.size();
 }
 
-int TableMeta::sys_field_num() const {
+int TableMeta::field_index(const char* field_name) const {
+  for (int i = sys_field_num(); i < fields_.size(); ++i) {
+      if(strcmp(fields_[i].name(), field_name) == 0){
+        return i - sys_field_num();
+      }
+  }
+  return -1;
+}
+
+int TableMeta::sys_field_num() const
+{
   return sys_fields_.size();
 }
 
-const IndexMeta * TableMeta::index(const char *name) const {
+const IndexMeta *TableMeta::index(const char *name) const
+{
   for (const IndexMeta &index : indexes_) {
     if (0 == strcmp(index.name(), name)) {
       return &index;
@@ -149,38 +190,79 @@ const IndexMeta * TableMeta::index(const char *name) const {
   return nullptr;
 }
 
-const IndexMeta * TableMeta::find_index_by_field(const char *field) const {
+// const IndexMeta *TableMeta::find_index_by_field(const char *field) const
+// {
+//   for (const IndexMeta &index : indexes_) {
+//     if (0 == strcmp(index.field(), field)) {
+//       return &index;
+//     }
+//   }
+//   return nullptr;
+// }
+
+const IndexMeta *TableMeta::find_index_by_fields(std::vector<const char*> &fields) const
+{
   for (const IndexMeta &index : indexes_) {
-    if (0 == strcmp(index.field(), field)) {
-      return &index;
+    if(index.fields_num() == fields.size()){
+      std::vector<const char*> index_fields = index.fields();
+      bool equal = true;
+      for(int i=0; i<index_fields.size(); ++i){
+        if(0 != strcmp(index_fields[i], fields[i])){
+          equal = false;
+          break;
+        }
+      }
+      if (equal) {
+        return &index;
+      }
     }
   }
   return nullptr;
 }
 
-const IndexMeta * TableMeta::index(int i ) const {
+// const IndexMeta *TableMeta::find_index_by_fields(char *fields[], int fields_num) const
+// {
+//   for (const IndexMeta &index : indexes_) {
+//     if(index.fields_num() == fields_num){
+//       std::vector<const char*> index_fields = index.fields();
+//       bool equal = true;
+//       for(int i=0; i<index_fields.size(); ++i){
+//         if(0 != strcmp(index_fields[i], fields[i])){
+//           equal = false;
+//           break;
+//         }
+//       }
+//       if (equal) {
+//         return &index;
+//       }
+//     }
+//   }
+//   return nullptr;
+// }
+
+const IndexMeta *TableMeta::index(int i) const
+{
   return &indexes_[i];
 }
 
-int TableMeta::index_num() const {
+int TableMeta::index_num() const
+{
   return indexes_.size();
 }
 
-int TableMeta::record_size() const {
+int TableMeta::record_size() const
+{
   return record_size_;
 }
 
-const std::vector<FieldMeta> &TableMeta::get_field() const{
-  return fields_;
-}
-
-int TableMeta::serialize(std::ostream &ss) const {
+int TableMeta::serialize(std::ostream &ss) const
+{
 
   Json::Value table_value;
   table_value[FIELD_TABLE_NAME] = name_;
 
   Json::Value fields_value;
-  for (const FieldMeta & field : fields_) {
+  for (const FieldMeta &field : fields_) {
     Json::Value field_value;
     field.to_json(field_value);
     fields_value.append(std::move(field_value));
@@ -207,7 +289,8 @@ int TableMeta::serialize(std::ostream &ss) const {
   return ret;
 }
 
-int TableMeta::deserialize(std::istream &is) {
+int TableMeta::deserialize(std::istream &is)
+{
   if (sys_fields_.empty()) {
     init_sys_fields();
   }
@@ -250,12 +333,12 @@ int TableMeta::deserialize(std::istream &is) {
     }
   }
 
-  std::sort(fields.begin(), fields.end(), 
-      [](const FieldMeta &f1, const FieldMeta &f2){return f1.offset() < f2.offset();});
+  std::sort(
+      fields.begin(), fields.end(), [](const FieldMeta &f1, const FieldMeta &f2) { return f1.offset() < f2.offset(); });
 
   name_.swap(table_name);
   fields_.swap(fields);
-  record_size_ = fields_.back().offset() + fields_.back().len();
+  record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
 
   const Json::Value &indexes_value = table_value[FIELD_INDEXES];
   if (!indexes_value.empty()) {
@@ -281,22 +364,24 @@ int TableMeta::deserialize(std::istream &is) {
   return (int)(is.tellg() - old_pos);
 }
 
-int TableMeta::get_serial_size() const {
+int TableMeta::get_serial_size() const
+{
   return -1;
 }
 
-void TableMeta::to_string(std::string &output) const {
-}
+void TableMeta::to_string(std::string &output) const
+{}
 
-void TableMeta::desc(std::ostream &os) const {
+void TableMeta::desc(std::ostream &os) const
+{
   os << name_ << '(' << std::endl;
-  for (const auto &field: fields_) {
+  for (const auto &field : fields_) {
     os << '\t';
     field.desc(os);
     os << std::endl;
   }
 
-  for (const auto &index: indexes_) {
+  for (const auto &index : indexes_) {
     os << '\t';
     index.desc(os);
     os << std::endl;

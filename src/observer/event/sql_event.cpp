@@ -13,17 +13,32 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "event/sql_event.h"
+
+#include <cstddef>
+
 #include "event/session_event.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/stmt/stmt.h"
 
-SQLStageEvent::SQLStageEvent(SessionEvent *event, std::string &sql) : 
-    session_event_(event), sql_(sql) {
-}
+SQLStageEvent::SQLStageEvent(SessionEvent *event, const std::string &sql) : session_event_(event), sql_(sql)
+{}
 
-SQLStageEvent::~SQLStageEvent() noexcept {
+SQLStageEvent::~SQLStageEvent() noexcept
+{
   if (session_event_ != nullptr) {
     session_event_ = nullptr;
     // SessionEvent *session_event = session_event_;
     // session_event_ = nullptr;
     // session_event->doneImmediate();
+  }
+
+  if (query_ != nullptr) {
+    query_destroy(query_);
+    query_ = nullptr;
+  }
+
+  if (stmt_ != nullptr) {
+    delete stmt_;
+    stmt_ = nullptr;
   }
 }

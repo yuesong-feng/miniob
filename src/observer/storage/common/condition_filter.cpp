@@ -9,12 +9,13 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 //
-// Created by Wangyunlai on 2021/5/7.
+// Created by Meiyi & Wangyunlai on 2021/5/7.
 //
 
 #include <stddef.h>
+#include <math.h>
 #include "condition_filter.h"
-#include "record_manager.h"
+#include "storage/record/record_manager.h"
 #include "common/log/log.h"
 #include "storage/common/table.h"
 
@@ -123,19 +124,40 @@ RC DefaultConditionFilter::init(Table &table, const Condition &condition)
   return init(left, right, type_left, condition.comp);
 }
 
+bool cmp_like(const char *str1, const char *str2) {
+  int len1 = strlen(str1);
+  int len2 = strlen(str2);
+  // '%'用于匹配零个到多个任意字符（英文单引号“'”除外），'_'用于匹配一个任意字符（英文单引号“'”除外）。
+  bool dp[len1+1][len2+1];
+  memset(dp, 0, sizeof(dp));
+  dp[0][0] = true;
+  for(int i=1; i<=len1; ++i){
+    for(int j=1; j<=len2; ++j){
+      if(str2[j-1]=='%'){
+        dp[i][j] = (dp[i][j-1] || dp[i-1][j] || dp[i-1][j-1]);
+      }
+      else if(str2[j-1]=='_' || str2[j-1]==str1[i-1]){
+        dp[i][j] = dp[i-1][j-1];
+      }
+    }
+  }
+
+  return dp[len1][len2];
+} 
+
 bool DefaultConditionFilter::filter(const Record &rec) const
 {
   char *left_value = nullptr;
   char *right_value = nullptr;
 
   if (left_.is_attr) {  // value
-    left_value = (char *)(rec.data + left_.attr_offset);
+    left_value = (char *)(rec.data() + left_.attr_offset);
   } else {
     left_value = (char *)left_.value;
   }
 
   if (right_.is_attr) {
-    right_value = (char *)(rec.data + right_.attr_offset);
+    right_value = (char *)(rec.data() + right_.attr_offset);
   } else {
     right_value = (char *)right_.value;
   }
@@ -146,7 +168,8 @@ bool DefaultConditionFilter::filter(const Record &rec) const
       // 按照C字符串风格来定
       cmp_result = strcmp(left_value, right_value);
     } break;
-    case INTS: {
+    case INTS: 
+    case DATES: {
       // 没有考虑大小端问题
       // 对int和float，要考虑字节对齐问题,有些平台下直接转换可能会跪
       int left = *(int *)left_value;
@@ -156,7 +179,8 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     case FLOATS: {
       float left = *(float *)left_value;
       float right = *(float *)right_value;
-      cmp_result = (int)(left - right);
+      float result = left - right;
+      cmp_result = result >= 0 ? ceil(result) : floor(result);
     } break;
     default: {
     }
@@ -175,6 +199,10 @@ bool DefaultConditionFilter::filter(const Record &rec) const
       return cmp_result >= 0;
     case GREAT_THAN:
       return cmp_result > 0;
+    case LIKE:
+      return cmp_like(left_value, right_value);
+    case NOT_LIKE:
+      return !cmp_like(left_value, right_value);
 
     default:
       break;

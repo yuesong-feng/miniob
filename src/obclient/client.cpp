@@ -29,17 +29,51 @@ See the Mulan PSL v2 for more details. */
 #include "common/defs.h"
 #include "common/lang/string.h"
 
+#ifdef USE_READLINE
+#include "readline/readline.h"
+#endif
+
 #define MAX_MEM_BUFFER_SIZE 8192
 #define PORT_DEFAULT 6789
 
 using namespace common;
 
+#ifdef USE_READLINE
+char *my_readline(const char *prompt) 
+{
+  return readline(prompt);
+}
+#else // USE_READLINE
+char *my_readline(const char *prompt)
+{
+  char *buffer = (char *)malloc(MAX_MEM_BUFFER_SIZE);
+  if (nullptr == buffer) {
+    fprintf(stderr, "failed to alloc line buffer");
+    return nullptr;
+  }
+  fprintf(stdout, prompt);
+  char *s = fgets(buffer, MAX_MEM_BUFFER_SIZE, stdin);
+  if (nullptr == s) {
+    fprintf(stderr, "failed to read message from console");
+    free(buffer);
+    return nullptr;
+  }
+  return buffer;
+}
+#endif // USE_READLINE
+
+/* this function config a exit-cmd list, strncasecmp func truncate the command from terminal according to the number,
+   'strncasecmp("exit", cmd, 4)' means that obclient read command string from terminal, truncate it to 4 chars from 
+   the beginning, then compare the result with 'exit', if they match, exit the obclient.
+*/
 bool is_exit_command(const char *cmd) {
   return 0 == strncasecmp("exit", cmd, 4) ||
-         0 == strncasecmp("bye", cmd, 3);
+         0 == strncasecmp("bye", cmd, 3) ||
+         0 == strncasecmp("\\q", cmd, 2) ;
 }
 
-int init_unix_sock(const char *unix_sock_path) {
+int init_unix_sock(const char *unix_sock_path)
+{
   int sockfd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (sockfd < 0) {
     fprintf(stderr, "failed to create unix socket. %s", strerror(errno));
@@ -52,15 +86,15 @@ int init_unix_sock(const char *unix_sock_path) {
   snprintf(sockaddr.sun_path, sizeof(sockaddr.sun_path), "%s", unix_sock_path);
 
   if (connect(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0) {
-    fprintf(stderr, "failed to connect to server. unix socket path '%s'. error %s",
-        sockaddr.sun_path, strerror(errno));
+    fprintf(stderr, "failed to connect to server. unix socket path '%s'. error %s", sockaddr.sun_path, strerror(errno));
     close(sockfd);
     return -1;
   }
   return sockfd;
 }
 
-int init_tcp_sock(const char *server_host, int server_port) {
+int init_tcp_sock(const char *server_host, int server_port)
+{
   struct hostent *host;
   struct sockaddr_in serv_addr;
 
@@ -80,8 +114,7 @@ int init_tcp_sock(const char *server_host, int server_port) {
   serv_addr.sin_addr = *((struct in_addr *)host->h_addr);
   bzero(&(serv_addr.sin_zero), 8);
 
-  if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) ==
-      -1) {
+  if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) == -1) {
     fprintf(stderr, "Failed to connect. errmsg=%d:%s\n", errno, strerror(errno));
     close(sockfd);
     return -1;
@@ -89,36 +122,8 @@ int init_tcp_sock(const char *server_host, int server_port) {
   return sockfd;
 }
 
-// 这里的代码本来是为了处理控制台不能接收超长字符串的问题
-// 但是设置控制台模式为非 ICANON 后，不能再正常的处理 backspace
-// 所以暂时不调用这个函数
-// 需要测试超长字符串场景的同学，可以通过文本重定向的方式测试
-int set_terminal_noncanonical() {
-  int fd = STDIN_FILENO;
-  struct termios old_termios;
-  int ret = tcgetattr(fd, &old_termios);
-  if (ret < 0) {
-    printf("Failed to get tc attr. error=%s\n", strerror(errno));
-    return -1;
-  }
-
-  struct termios new_attr = old_termios;
-  new_attr.c_lflag &= ~ICANON;
-	new_attr.c_cc[VERASE] = '\b';
-  ret = tcsetattr(fd, TCSANOW, &new_attr);
-  if (ret < 0) {
-    printf("Failed to set tc attr. error=%s\n", strerror(errno));
-    return -1;
-  }
-  return 0;
-}
-
-int main(int argc, char *argv[]) {
-  int ret = 0; // set_terminal_noncanonical();
-  if (ret < 0) {
-    printf("Warning: failed to set terminal non canonical. Long command may be handled incorrect\n");
-  }
-
+int main(int argc, char *argv[])
+{
   const char *unix_socket_path = nullptr;
   const char *server_host = "127.0.0.1";
   int server_port = PORT_DEFAULT;
@@ -126,22 +131,21 @@ int main(int argc, char *argv[]) {
   extern char *optarg;
   while ((opt = getopt(argc, argv, "s:h:p:")) > 0) {
     switch (opt) {
-    case 's':
-      unix_socket_path = optarg;
-      break;
-    case 'p':
-      server_port = atoi(optarg);
-      break;
-    case 'h':
-      server_host = optarg;
-      break;
+      case 's':
+        unix_socket_path = optarg;
+        break;
+      case 'p':
+        server_port = atoi(optarg);
+        break;
+      case 'h':
+        server_host = optarg;
+        break;
     }
   }
 
   const char *prompt_str = "miniob > ";
 
   int sockfd, send_bytes;
-  // char send[MAXLINE];
 
   if (unix_socket_path != nullptr) {
     sockfd = init_unix_sock(unix_socket_path);
@@ -153,33 +157,34 @@ int main(int argc, char *argv[]) {
   }
 
   char send_buf[MAX_MEM_BUFFER_SIZE];
-  // char buf[MAXDATASIZE];
 
-  fputs(prompt_str, stdout);
-  while (fgets(send_buf, MAX_MEM_BUFFER_SIZE, stdin) != NULL) {
-    if (common::is_blank(send_buf)) {
-      fputs(prompt_str, stdout);
+  char *input_command = nullptr;
+  while ((input_command = my_readline(prompt_str)) != nullptr) {
+    if (common::is_blank(input_command)) {
+      free(input_command);
       continue;
     }
 
-    if (is_exit_command(send_buf)) {
+    if (is_exit_command(input_command)) {
+      free(input_command);
       break;
     }
 
-    if ((send_bytes = write(sockfd, send_buf, strlen(send_buf) + 1)) == -1) {
+    if ((send_bytes = write(sockfd, input_command, strlen(input_command) + 1)) == -1) { // TODO writen
       fprintf(stderr, "send error: %d:%s \n", errno, strerror(errno));
       exit(1);
     }
+    free(input_command);
     memset(send_buf, 0, sizeof(send_buf));
 
     int len = 0;
-    while((len = recv(sockfd, send_buf, MAX_MEM_BUFFER_SIZE, 0)) > 0){  
+    while ((len = recv(sockfd, send_buf, MAX_MEM_BUFFER_SIZE, 0)) > 0) {
       bool msg_end = false;
       for (int i = 0; i < len; i++) {
         if (0 == send_buf[i]) {
           msg_end = true;
           break;
-		    }
+        }
         printf("%c", send_buf[i]);
       }
       if (msg_end) {
@@ -196,7 +201,6 @@ int main(int argc, char *argv[]) {
       printf("Connection has been closed\n");
       break;
     }
-    fputs(prompt_str, stdout);
   }
   close(sockfd);
 

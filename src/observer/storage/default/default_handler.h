@@ -9,7 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 //
-// Created by Longda on 2021/5/11.
+// Created by Meiyi & Longda on 2021/5/11.
 //
 #ifndef __OBSERVER_STORAGE_DEFAULT_ENGINE_H__
 #define __OBSERVER_STORAGE_DEFAULT_ENGINE_H__
@@ -97,17 +97,15 @@ public:
    * 否则，创建该索引。
    * 创建索引的工作包括：①创建并打开索引文件；
    * ②逐个扫描被索引的记录，并向索引文件中插入索引项；③关闭索引
-   * @param indexName
-   * @param relName
-   * @param attrName
    * @return
    */
-  RC create_index(Trx *trx, const char *dbname, const char *relation_name, const char *index_name, const char *attribute_name);
+  RC create_index(
+      Trx *trx, const char *dbname, const char *relation_name, const char *index_name, const char *attribute_name, int is_unique);
 
   /**
    * 该函数用来删除名为indexName的索引。
    * 函数首先检查索引是否存在，如果不存在，则返回一个非零的错误码。否则，销毁该索引
-   * @param index_name 
+   * @param index_name
    * @return
    */
   RC drop_index(Trx *trx, const char *dbname, const char *relation_name, const char *index_name);
@@ -117,12 +115,9 @@ public:
    * nValues为属性值个数，values为对应的属性值数组。
    * 函数根据给定的属性值构建元组，调用记录管理模块的函数插入该元组，
    * 然后在该表的每个索引中为该元组创建合适的索引项
-   * @param relName
-   * @param nValues
-   * @param values
    * @return
    */
-  RC insert_record(Trx * trx, const char *dbname, const char *relation_name, int value_num, const Value *values);
+  RC insert_record(Trx *trx, const char *dbname, const char *relation_name, int value_num, const Value *values);
 
   /**
    * 该函数用来删除relName表中所有满足指定条件的元组以及该元组对应的索引项。
@@ -133,36 +128,33 @@ public:
    * @param conditions
    * @return
    */
-  RC delete_record(Trx *trx, const char *dbname, const char *relation_name,
-                           int condition_num, const Condition *conditions, int *deleted_count);
+  RC delete_record(Trx *trx, const char *dbname, const char *relation_name, int condition_num,
+      const Condition *conditions, int *deleted_count);
 
   /**
    * 该函数用于更新relName表中所有满足指定条件的元组，
    * 在每一个更新的元组中将属性attrName的值设置为一个新的值。
    * 如果没有指定条件，则此方法更新relName中所有元组。
    * 如果要更新一个被索引的属性，应当先删除每个被更新元组对应的索引条目，然后插入一个新的索引条目
-   * @param relName
-   * @param attrName
-   * @param value
-   * @param nConditions
-   * @param conditions
    * @return
    */
-  RC update_record(Trx * trx, const char *dbname, const char *relation_name, const char *attribute_name, const Value *value,
-                            int condition_num, const Condition *conditions, int *updated_count);
+  RC update_record(Trx *trx, const char *dbname, const char *relation_name, const char *attribute_name,
+      const Value *value, int condition_num, const Condition *conditions, int *updated_count);
 
 public:
   Db *find_db(const char *dbname) const;
-  Table *find_table(const char * dbname, const char *table_name) const;
+  Table *find_table(const char *dbname, const char *table_name) const;
 
   RC sync();
 
 public:
+  static void set_default(DefaultHandler *handler);
   static DefaultHandler &get_default();
+
 private:
   std::string base_dir_;
   std::string db_dir_;
-  std::map<std::string, Db*>          opened_dbs_;
-}; // class Handler
+  std::map<std::string, Db *> opened_dbs_;
+};  // class Handler
 
-#endif // __OBSERVER_STORAGE_DEFAULT_ENGINE_H__
+#endif  // __OBSERVER_STORAGE_DEFAULT_ENGINE_H__

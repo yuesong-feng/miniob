@@ -34,14 +34,16 @@ using namespace common;
 const std::string SessionStage::SQL_METRIC_TAG = "SessionStage.sql";
 
 // Constructor
-SessionStage::SessionStage(const char *tag)
-    : Stage(tag), resolve_stage_(nullptr), sql_metric_(nullptr) {}
+SessionStage::SessionStage(const char *tag) : Stage(tag), plan_cache_stage_(nullptr), sql_metric_(nullptr)
+{}
 
 // Destructor
-SessionStage::~SessionStage() {}
+SessionStage::~SessionStage()
+{}
 
 // Parse properties, instantiate a stage object
-Stage *SessionStage::make_stage(const std::string &tag) {
+Stage *SessionStage::make_stage(const std::string &tag)
+{
   SessionStage *stage = new (std::nothrow) SessionStage(tag.c_str());
   if (stage == nullptr) {
     LOG_ERROR("new ExecutorStage failed");
@@ -52,7 +54,8 @@ Stage *SessionStage::make_stage(const std::string &tag) {
 }
 
 // Set properties for this object set in stage specific properties
-bool SessionStage::set_properties() {
+bool SessionStage::set_properties()
+{
   //  std::string stageNameStr(stage_name_);
   //  std::map<std::string, std::string> section = g_properties()->get(
   //    stageNameStr);
@@ -65,11 +68,12 @@ bool SessionStage::set_properties() {
 }
 
 // Initialize stage params and validate outputs
-bool SessionStage::initialize() {
+bool SessionStage::initialize()
+{
   LOG_TRACE("Enter");
 
   std::list<Stage *>::iterator stgp = next_stage_list_.begin();
-  resolve_stage_ = *(stgp++);
+  plan_cache_stage_ = *(stgp++);
 
   MetricsRegistry &metricsRegistry = get_metrics_registry();
   sql_metric_ = new SimpleTimer();
@@ -79,7 +83,8 @@ bool SessionStage::initialize() {
 }
 
 // Cleanup after disconnection
-void SessionStage::cleanup() {
+void SessionStage::cleanup()
+{
   LOG_TRACE("Enter");
 
   MetricsRegistry &metricsRegistry = get_metrics_registry();
@@ -92,7 +97,8 @@ void SessionStage::cleanup() {
   LOG_TRACE("Exit");
 }
 
-void SessionStage::handle_event(StageEvent *event) {
+void SessionStage::handle_event(StageEvent *event)
+{
   LOG_TRACE("Enter\n");
 
   // right now, we just support only one event.
@@ -102,7 +108,8 @@ void SessionStage::handle_event(StageEvent *event) {
   return;
 }
 
-void SessionStage::callback_event(StageEvent *event, CallbackContext *context) {
+void SessionStage::callback_event(StageEvent *event, CallbackContext *context)
+{
   LOG_TRACE("Enter\n");
 
   SessionEvent *sev = dynamic_cast<SessionEvent *>(event);
@@ -118,19 +125,19 @@ void SessionStage::callback_event(StageEvent *event, CallbackContext *context) {
     len = strlen(response) + 1;
   }
   Server::send(sev->get_client(), response, len);
-	if ('\0' != response[len - 1]) {
-		// 这里强制性的给发送一个消息终结符，如果需要发送多条消息，需要调整
-		char end = 0;
-		Server::send(sev->get_client(), &end, 1);
-	}
+  if ('\0' != response[len - 1]) {
+    // 这里强制性的给发送一个消息终结符，如果需要发送多条消息，需要调整
+    char end = 0;
+    Server::send(sev->get_client(), &end, 1);
+  }
 
   // sev->done();
   LOG_TRACE("Exit\n");
   return;
 }
 
-void SessionStage::handle_request(StageEvent *event) {
-
+void SessionStage::handle_request(StageEvent *event)
+{
   SessionEvent *sev = dynamic_cast<SessionEvent *>(event);
   if (nullptr == sev) {
     LOG_ERROR("Cannot cat event to sessionEvent");
@@ -141,7 +148,7 @@ void SessionStage::handle_request(StageEvent *event) {
   if (nullptr == sev->get_request_buf()) {
     LOG_ERROR("Invalid request buffer.");
     sev->done_immediate();
-    return ;
+    return;
   }
 
   std::string sql = sev->get_request_buf();
@@ -161,5 +168,5 @@ void SessionStage::handle_request(StageEvent *event) {
   sev->push_callback(cb);
 
   SQLStageEvent *sql_event = new SQLStageEvent(sev, sql);
-  resolve_stage_->handle_event(sql_event);
+  plan_cache_stage_->handle_event(sql_event);
 }

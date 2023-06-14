@@ -1,0 +1,1 @@
+./build/bin/obclient -s miniob.sock

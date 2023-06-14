@@ -26,9 +26,11 @@ See the Mulan PSL v2 for more details. */
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <event2/thread.h>
 
 #include "common/lang/mutex.h"
 #include "common/log/log.h"
+#include "common/io/io.h"
 #include "common/seda/seda_config.h"
 #include "event/session_event.h"
 #include "session/session.h"
@@ -43,26 +45,30 @@ Stage *Server::session_stage_ = nullptr;
 common::SimpleTimer *Server::read_socket_metric_ = nullptr;
 common::SimpleTimer *Server::write_socket_metric_ = nullptr;
 
-ServerParam::ServerParam() {
+ServerParam::ServerParam()
+{
   listen_addr = INADDR_ANY;
   max_connection_num = MAX_CONNECTION_NUM_DEFAULT;
   port = PORT_DEFAULT;
 }
 
-Server::Server(ServerParam input_server_param) : server_param_(input_server_param) {
+Server::Server(ServerParam input_server_param) : server_param_(input_server_param)
+{
   started_ = false;
   server_socket_ = 0;
   event_base_ = nullptr;
   listen_ev_ = nullptr;
 }
 
-Server::~Server() {
+Server::~Server()
+{
   if (started_) {
     shutdown();
   }
 }
 
-void Server::init(){
+void Server::init()
+{
   session_stage_ = get_seda_config()->get_stage(SESSION_STAGE_NAME);
 
   MetricsRegistry &metricsRegistry = get_metrics_registry();
@@ -74,10 +80,11 @@ void Server::init(){
   if (Server::write_socket_metric_ == nullptr) {
     Server::write_socket_metric_ = new SimpleTimer();
     metricsRegistry.register_metric(WRITE_SOCKET_METRIC_TAG, Server::write_socket_metric_);
-  }  
+  }
 }
 
-int Server::set_non_block(int fd) {
+int Server::set_non_block(int fd)
+{
 
   int flags = fcntl(fd, F_GETFL);
   if (flags == -1) {
@@ -93,7 +100,8 @@ int Server::set_non_block(int fd) {
   return 0;
 }
 
-void Server::close_connection(ConnectionContext *client_context) {
+void Server::close_connection(ConnectionContext *client_context)
+{
   LOG_INFO("Close connection of %s.", client_context->addr);
   event_del(&client_context->read_event);
   ::close(client_context->fd);
@@ -102,9 +110,10 @@ void Server::close_connection(ConnectionContext *client_context) {
   delete client_context;
 }
 
-void Server::recv(int fd, short ev, void *arg) {
+void Server::recv(int fd, short ev, void *arg)
+{
   ConnectionContext *client = (ConnectionContext *)arg;
-  //Server::send(sev->getClient(), sev->getRequestBuf(), strlen(sev->getRequestBuf()));
+  // Server::send(sev->getClient(), sev->getRequestBuf(), strlen(sev->getRequestBuf()));
 
   int data_len = 0;
   int read_len = 0;
@@ -113,7 +122,7 @@ void Server::recv(int fd, short ev, void *arg) {
 
   TimerStat timer_stat(*read_socket_metric_);
   MUTEX_LOCK(&client->mutex);
-	// 持续接收消息，直到遇到'\0'。将'\0'遇到的后续数据直接丢弃没有处理，因为目前仅支持一收一发的模式
+  // 持续接收消息，直到遇到'\0'。将'\0'遇到的后续数据直接丢弃没有处理，因为目前仅支持一收一发的模式
   while (true) {
     read_len = ::read(client->fd, client->buf + data_len, buf_size - data_len);
     if (read_len < 0) {
@@ -131,9 +140,8 @@ void Server::recv(int fd, short ev, void *arg) {
       break;
     }
 
-
     bool msg_end = false;
-    for(int i = 0; i < read_len; i++) {
+    for (int i = 0; i < read_len; i++) {
       if (client->buf[data_len + i] == 0) {
         data_len += i + 1;
         msg_end = true;
@@ -151,7 +159,7 @@ void Server::recv(int fd, short ev, void *arg) {
   MUTEX_UNLOCK(&client->mutex);
   timer_stat.end();
 
-  if(data_len > buf_size) {
+  if (data_len > buf_size) {
     LOG_WARN("The length of sql exceeds the limitation %d\n", buf_size);
     close_connection(client);
     return;
@@ -161,8 +169,7 @@ void Server::recv(int fd, short ev, void *arg) {
     close_connection(client);
     return;
   } else if (read_len < 0) {
-    LOG_ERROR("Failed to read socket of %s, %s\n", client->addr,
-              strerror(errno));
+    LOG_ERROR("Failed to read socket of %s, %s\n", client->addr, strerror(errno));
     close_connection(client);
     return;
   }
@@ -173,7 +180,8 @@ void Server::recv(int fd, short ev, void *arg) {
 }
 
 // 这个函数仅负责发送数据，至于是否是一个完整的消息，由调用者控制
-int Server::send(ConnectionContext *client, const char *buf, int data_len) {
+int Server::send(ConnectionContext *client, const char *buf, int data_len)
+{
   if (buf == nullptr || data_len == 0) {
     return 0;
   }
@@ -181,27 +189,21 @@ int Server::send(ConnectionContext *client, const char *buf, int data_len) {
   TimerStat writeStat(*write_socket_metric_);
 
   MUTEX_LOCK(&client->mutex);
-  int wlen = 0;
-  for (int i = 0; i < 3 && wlen < data_len; i++) {
-    int len = write(client->fd, buf + wlen, data_len - wlen);
-    if (len < 0) {
-      LOG_ERROR("Failed to send data back to client\n");
-      MUTEX_UNLOCK(&client->mutex);
+  int ret = common::writen(client->fd, buf, data_len);
+  if (ret < 0) {
+    LOG_ERROR("Failed to send data back to client. ret=%d, error=%s", ret, strerror(errno));
+    MUTEX_UNLOCK(&client->mutex);
 
-      close_connection(client);
-      return -STATUS_FAILED_NETWORK;
-    }
-    wlen += len;
-  }
-  if (wlen < data_len) {
-    LOG_WARN("Not all data has been send back to client");
+    close_connection(client);
+    return -STATUS_FAILED_NETWORK;
   }
 
   MUTEX_UNLOCK(&client->mutex);
   return 0;
 }
 
-void Server::accept(int fd, short ev, void *arg) {
+void Server::accept(int fd, short ev, void *arg)
+{
   Server *instance = (Server *)arg;
   struct sockaddr_in addr;
   socklen_t addrlen = sizeof(addr);
@@ -226,8 +228,7 @@ void Server::accept(int fd, short ev, void *arg) {
 
   ret = instance->set_non_block(client_fd);
   if (ret < 0) {
-    LOG_ERROR("Failed to set socket of %s as non blocking, %s", addr_str.c_str(),
-              strerror(errno));
+    LOG_ERROR("Failed to set socket of %s as non blocking, %s", addr_str.c_str(), strerror(errno));
     ::close(client_fd);
     return;
   }
@@ -237,8 +238,7 @@ void Server::accept(int fd, short ev, void *arg) {
     int yes = 1;
     ret = setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
     if (ret < 0) {
-      LOG_ERROR("Failed to set socket of %s option as : TCP_NODELAY %s\n",
-                addr_str.c_str(), strerror(errno));
+      LOG_ERROR("Failed to set socket of %s option as : TCP_NODELAY %s\n", addr_str.c_str(), strerror(errno));
       ::close(client_fd);
       return;
     }
@@ -250,14 +250,12 @@ void Server::accept(int fd, short ev, void *arg) {
   snprintf(client_context->addr, sizeof(client_context->addr), "%s", addr_str.c_str());
   pthread_mutex_init(&client_context->mutex, nullptr);
 
-  event_set(&client_context->read_event, client_context->fd, EV_READ | EV_PERSIST,
-            recv, client_context);
+  event_set(&client_context->read_event, client_context->fd, EV_READ | EV_PERSIST, recv, client_context);
 
   ret = event_base_set(instance->event_base_, &client_context->read_event);
   if (ret < 0) {
     LOG_ERROR(
-            "Failed to do event_base_set for read event of %s into libevent, %s",
-            client_context->addr, strerror(errno));
+        "Failed to do event_base_set for read event of %s into libevent, %s", client_context->addr, strerror(errno));
     delete client_context;
     ::close(instance->server_socket_);
     return;
@@ -265,8 +263,7 @@ void Server::accept(int fd, short ev, void *arg) {
 
   ret = event_add(&client_context->read_event, nullptr);
   if (ret < 0) {
-    LOG_ERROR("Failed to event_add for read event of %s into libevent, %s",
-              client_context->addr, strerror(errno));
+    LOG_ERROR("Failed to event_add for read event of %s into libevent, %s", client_context->addr, strerror(errno));
     delete client_context;
     ::close(instance->server_socket_);
     return;
@@ -276,14 +273,16 @@ void Server::accept(int fd, short ev, void *arg) {
   LOG_INFO("Accepted connection from %s\n", client_context->addr);
 }
 
-int Server::start() {
+int Server::start()
+{
   if (server_param_.use_unix_socket) {
     return start_unix_socket_server();
   } else {
     return start_tcp_server();
   }
 }
-int Server::start_tcp_server() {
+int Server::start_tcp_server()
+{
   int ret = 0;
   struct sockaddr_in sa;
 
@@ -296,8 +295,7 @@ int Server::start_tcp_server() {
   int yes = 1;
   ret = setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
   if (ret < 0) {
-    LOG_ERROR("Failed to set socket option of reuse address: %s.",
-              strerror(errno));
+    LOG_ERROR("Failed to set socket option of reuse address: %s.", strerror(errno));
     ::close(server_socket_);
     return -1;
   }
@@ -338,8 +336,7 @@ int Server::start_tcp_server() {
 
   ret = event_add(listen_ev_, nullptr);
   if (ret < 0) {
-    LOG_ERROR("event_add(): can not add accept event into libevent, %s",
-              strerror(errno));
+    LOG_ERROR("event_add(): can not add accept event into libevent, %s", strerror(errno));
     ::close(server_socket_);
     return -1;
   }
@@ -349,7 +346,8 @@ int Server::start_tcp_server() {
   return 0;
 }
 
-int Server::start_unix_socket_server() {
+int Server::start_unix_socket_server()
+{
 
   int ret = 0;
   server_socket_ = socket(PF_UNIX, SOCK_STREAM, 0);
@@ -396,8 +394,7 @@ int Server::start_unix_socket_server() {
 
   ret = event_add(listen_ev_, nullptr);
   if (ret < 0) {
-    LOG_ERROR("event_add(): can not add accept event into libevent, %s",
-              strerror(errno));
+    LOG_ERROR("event_add(): can not add accept event into libevent, %s", strerror(errno));
     ::close(server_socket_);
     return -1;
   }
@@ -407,7 +404,9 @@ int Server::start_unix_socket_server() {
   return 0;
 }
 
-int Server::serve() {
+int Server::serve()
+{
+  evthread_use_pthreads();
   event_base_ = event_base_new();
   if (event_base_ == nullptr) {
     LOG_ERROR("Failed to create event base, %s.", strerror(errno));
@@ -422,18 +421,6 @@ int Server::serve() {
 
   event_base_dispatch(event_base_);
 
-  return 0;
-}
-
-void Server::shutdown() {
-  LOG_INFO("Server shutting down");
-
-  // cleanup
-  struct timeval exit_time;
-  gettimeofday(&exit_time, nullptr);
-  exit_time.tv_sec += 10;
-  event_base_loopexit(event_base_, &exit_time);
-
   if (listen_ev_ != nullptr) {
     event_del(listen_ev_);
     event_free(listen_ev_);
@@ -447,4 +434,16 @@ void Server::shutdown() {
 
   started_ = false;
   LOG_INFO("Server quit");
+  return 0;
+}
+
+void Server::shutdown()
+{
+  LOG_INFO("Server shutting down");
+
+  // cleanup
+  if (event_base_ != nullptr && started_) {
+    started_ = false;
+    event_base_loopexit(event_base_, nullptr);
+  }
 }
